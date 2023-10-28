@@ -7,9 +7,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  const supply = await hre.ethers.parseEther("100000000");
-
-  const stWETH = await hre.ethers.deployContract("stWETH", ["Staked WETH", "stWETH", supply]);
+  const stWETH = await hre.ethers.deployContract("stWETH", ["StakedWETH", "stWETH"]);
 
   await stWETH.waitForDeployment();
 
@@ -17,13 +15,13 @@ async function main() {
     `stWETH contract deployed at ${stWETH.target}`
   );
 
-  const staking = await hre.ethers.deployContract("Staking");
+  // const staking = await hre.ethers.deployContract("Staking");
 
-  await staking.waitForDeployment();
+  // await staking.waitForDeployment();
 
-  console.log(
-    `Staking contract deployed at ${staking.target}`
-  );
+  // console.log(
+  //   `Staking contract deployed at ${staking.target}`
+  // );
 }
 
 // We recommend this pattern to be able to use async/await everywhere
