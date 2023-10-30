@@ -7,21 +7,13 @@
 const hre = require("hardhat");
 
 async function main() {
-  const stWETH = await hre.ethers.deployContract("stWETH", ["StakedWETH", "stWETH"]);
+  const staking = await hre.ethers.deployContract("Staking");
 
-  await stWETH.waitForDeployment();
+  await staking.waitForDeployment();
 
   console.log(
-    `stWETH contract deployed at ${stWETH.target}`
+    `Staking contract deployed at ${staking.target}`
   );
-
-  // const staking = await hre.ethers.deployContract("Staking");
-
-  // await staking.waitForDeployment();
-
-  // console.log(
-  //   `Staking contract deployed at ${staking.target}`
-  // );
 }
 
 // We recommend this pattern to be able to use async/await everywhere

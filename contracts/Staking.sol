@@ -9,17 +9,16 @@ contract Staking {
 
     mapping (string => Pool) public _pools;
 
-    event CreatePool(address creator, address indexed token, string indexed poolID, uint256 apy, uint256 time, uint256 fee);
+    event CreatePool(address creator, address token, address indexed pool, string indexed poolID, uint256 duration, uint256 rewards);
 
     constructor() {}
 
-    function createStakingPool(string memory name, address token, uint256 apy, uint256 time, uint256 fee) public returns (string memory, address) {
+    function createStakingPool(string memory name, address token, uint256 duration, uint256 amount) public {
         Pool pool = new Pool(
             token,
             msg.sender,
-            apy,
-            time,
-            fee
+            duration,
+            amount
         );
 
         string memory poolID = string(abi.encodePacked(name, "#", block.timestamp));
@@ -28,8 +27,6 @@ contract Staking {
 
         _pools[poolID] = pool;
 
-        emit CreatePool(msg.sender, token, poolID, apy, time, fee);
-
-        return (poolID, address(pool));
+        emit CreatePool(msg.sender, token, address(pool), poolID, duration, amount);
     }
 }
