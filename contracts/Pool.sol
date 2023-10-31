@@ -5,6 +5,11 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract Pool {
+    enum Status {
+        ACTIVE,
+        INACTIVE
+    }
+
     IERC20 public Token;
 
     address public Creator;
@@ -12,6 +17,8 @@ contract Pool {
     uint256 public PoolTime;
 
     uint256 public PoolDuration;
+
+    Status public PoolStatus;
 
     uint256 public RewardsBalance;
 
@@ -25,6 +32,8 @@ contract Pool {
         uint256 lock_ratio;
         uint256 stake_ratio;
         uint256 reward_ratio;
+        uint256 balance;
+        Status stake_status;
     }
 
     Stake[] public stakes;
@@ -46,6 +55,8 @@ contract Pool {
 
         PoolDuration = duration;
 
+        PoolStatus = Status.ACTIVE;
+
         TotalStaked = 0;
 
         RewardsBalance = rewards;
@@ -57,6 +68,8 @@ contract Pool {
     }
 
     function staking(uint256 _amount, uint256 duration) public payable {
+        require(PoolStatus == Status.ACTIVE, "This Pool is not active at the moment.");
+
         require(_amount > 0, "Not enough tokens required for staking.");
 
         require(duration > PoolDuration, "You cannot stake beyond the duration of the Pool.");
@@ -76,7 +89,9 @@ contract Pool {
             lockduration : duration,
             lock_ratio : duration / poolTimeLeft,
             stake_ratio : _amount / TotalStaked,
-            reward_ratio : (duration / poolTimeLeft) * (_amount / TotalStaked)
+            reward_ratio : (duration / poolTimeLeft) * (_amount / TotalStaked),
+            balance : 0,
+            stake_status : Status.ACTIVE
         });
 
         stakes.push(stake);
@@ -117,39 +132,93 @@ contract Pool {
 
         uint256 amountStaked = stake01.amount;
 
-        uint256 accumulated = stake01.reward_ratio * RewardsBalance;
+        uint256 accumulated = (stake01.reward_ratio * RewardsBalance) + amountStaked;
 
         return (accumulated, amountStaked, maxRewardsPerUser, maxRewardsPerDay);
     }
 
     function withdrawal() public payable {
+        require(PoolStatus == Status.ACTIVE, "This Pool is not active at the moment.");
+
         Stake storage stake02 = _stakes[msg.sender];
+
+        require(stake02.stake_status == Status.ACTIVE, "You are ineligible for withdrawal.");
 
         uint256 timeElapsed = (block.timestamp - stake02.locktime) / 86400;
 
         require(timeElapsed >= stake02.lockduration, "Withdrawal is not available at this time.");
 
-        (uint256 yield, , , ) = calculateStakingYield();
+        (uint256 yield, , uint256 maxRewardsPerUser, ) = calculateStakingYield();
 
-        require(Token.transferFrom(address(this), msg.sender, yield), "Transfer of tokens from staking yield failed.");
+        if(yield > maxRewardsPerUser) {
+            require(Token.transferFrom(address(this), msg.sender, yield), "Transfer of tokens from staking yield failed.");
+        
+            stake02.balance = maxRewardsPerUser - yield;
 
-        emit Withdrawal(msg.sender, yield);
+            emit Withdrawal(msg.sender, maxRewardsPerUser);
+        } else {
+            require(Token.transferFrom(address(this), msg.sender, yield), "Transfer of tokens from staking yield failed.");
+
+            stake02.stake_status = Status.INACTIVE;
+
+            emit Withdrawal(msg.sender, yield);
+        }
     }
 
     function earlyWithdrawal() public payable {
+        require(PoolStatus == Status.ACTIVE, "This Pool is not active at the moment.");
+
         Stake storage stake03 = _stakes[msg.sender];
+
+        require(stake03.stake_status == Status.ACTIVE, "You are ineligible for withdrawal.");
 
         uint256 stakeTimeElapsed = (block.timestamp - stake03.locktime) / 86400;
 
         uint256 stakeTimeLeft = stake03.lockduration - stakeTimeElapsed;
 
-        (uint256 yield, , , ) = calculateStakingYield();
+        (uint256 yield, , uint256 maxRewardsPerUser, ) = calculateStakingYield();
 
         uint256 amount = yield / stakeTimeLeft;
 
-        require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+        if(amount > maxRewardsPerUser) {
+            require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+        
+            stake03.balance = maxRewardsPerUser - amount;
 
-        emit Withdrawal(msg.sender, yield);
+            emit Withdrawal(msg.sender, maxRewardsPerUser);
+        } else {
+            require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+
+            stake03.stake_status = Status.INACTIVE;
+
+            emit Withdrawal(msg.sender, amount);
+        }
+    }
+
+    function withdrawBalance() public payable {
+        require(PoolStatus == Status.ACTIVE, "This Pool is not active at the moment.");
+
+        Stake storage stake04 = _stakes[msg.sender];
+
+        uint256 amount = stake04.balance;
+
+        require(stake04.stake_status == Status.ACTIVE && amount > 0, "You are ineligible for withdrawal.");
+    
+        ( , , uint256 maxRewardsPerUser, ) = calculateStakingYield();
+
+        if(amount > maxRewardsPerUser) {
+            require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+        
+            stake04.balance = maxRewardsPerUser - amount;
+
+            emit Withdrawal(msg.sender, maxRewardsPerUser);
+        } else {
+            require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+
+            stake04.stake_status = Status.INACTIVE;
+
+            emit Withdrawal(msg.sender, amount);
+        }
     }
 
     function changePoolTime(uint256 time) onlyCreator public {
@@ -158,6 +227,14 @@ contract Pool {
 
     function changePoolDuration(uint256 duration) onlyCreator public {
         PoolDuration = duration;
+    }
+
+    function deactivatePool() onlyCreator public {
+        uint256 poolTimeElapsed = (block.timestamp - PoolTime) / 86400;
+
+        require(poolTimeElapsed >= PoolDuration, "Cannot deactivate the pool at the moment.");
+
+        PoolStatus = Status.INACTIVE;
     }
 
     function increaseRewardsBalance(uint256 _amount) onlyCreator public {
