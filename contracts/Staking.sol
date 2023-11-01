@@ -13,12 +13,13 @@ contract Staking {
 
     constructor() {}
 
-    function createStakingPool(string memory name, address token, uint256 duration, uint256 amount) public {
+    function createStakingPool(string memory name, address token, uint256 duration, uint256 amount, uint256 fee) public {
         Pool pool = new Pool(
             token,
             msg.sender,
             duration,
-            amount
+            amount,
+            fee
         );
 
         string memory poolID = string(abi.encodePacked(name, "#", block.timestamp));

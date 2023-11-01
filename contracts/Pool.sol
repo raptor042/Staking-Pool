@@ -20,6 +20,8 @@ contract Pool {
 
     Status public PoolStatus;
 
+    uint256 public EarlyWithdrawalFee;
+
     uint256 public RewardsBalance;
 
     uint256 public TotalStaked;
@@ -44,7 +46,7 @@ contract Pool {
 
     event Withdrawal(address indexed _user, uint256 amount);
 
-    constructor(address _token, address creator, uint256 duration, uint256 rewards) {
+    constructor(address _token, address creator, uint256 duration, uint256 rewards, uint256 fee) {
         Token = IERC20(_token);
 
         // require(Token.transferFrom(msg.sender, address(this), rewards), "Transfer of token rewards for staking failed.");
@@ -56,6 +58,8 @@ contract Pool {
         PoolDuration = duration;
 
         PoolStatus = Status.ACTIVE;
+
+        EarlyWithdrawalFee = fee;
 
         TotalStaked = 0;
 
@@ -70,9 +74,11 @@ contract Pool {
     function staking(uint256 _amount, uint256 duration) public payable {
         require(PoolStatus == Status.ACTIVE, "This Pool is not active at the moment.");
 
+        require(userStakeExists(), "A user cannot stake while he/she has an active staking position.");
+
         require(_amount > 0, "Not enough tokens required for staking.");
 
-        require(duration < PoolDuration && duration > 1, "Inappriopate lock duration.");
+        require(duration < PoolDuration && duration >= 1, "Inappriopate lock duration.");
 
         // require(Token.transferFrom(msg.sender, address(this), _amount), "Transfer of tokens for staking failed.");
 
@@ -82,9 +88,9 @@ contract Pool {
 
         uint256 poolTimeLeft = PoolDuration - poolTimeElapsed;
 
-        uint256 lockratio = (duration * 100) / poolTimeLeft;
+        uint256 lockratio = (duration * 1000) / poolTimeLeft;
 
-        uint256 stakeratio = (_amount * 100) / TotalStaked;
+        uint256 stakeratio = (_amount * 1000) / TotalStaked;
 
         uint256 rewardratio = 0;
 
@@ -94,6 +100,8 @@ contract Pool {
             rewardratio = 1 * lockratio;
         } else if(stakeratio == 0 && lockratio == 0) {
             rewardratio = 1 * 1;
+        } else {
+            rewardratio = lockratio * stakeratio;
         }
 
         require(rewardratio != 0, "Rewards cannot be zero.");
@@ -118,7 +126,7 @@ contract Pool {
     }
 
     function possibleWithdrawals() internal view returns (uint256) {
-        uint256 count = 1;
+        uint256 count = 0;
 
         for(uint256 i = 0; i < stakes.length; i++) {
             Stake storage _stake = stakes[i];
@@ -130,10 +138,30 @@ contract Pool {
             }
         }
 
+        if(count == 0) {
+            count = 1;
+        }
+
         return count;
     }
 
-    function calculateStakingYield() public view returns (uint256, uint256, uint256, uint256) {
+    function userStakeExists() internal view returns (bool) {
+        bool exists = false;
+
+        for(uint256 i = 0; i < stakes.length; i++) {
+            Stake storage _stake = stakes[i];
+
+            if(_stake.user == msg.sender && _stake.stake_status == Status.ACTIVE) {
+                exists = true;
+
+                break;
+            }
+        }
+
+        return exists;
+    }
+
+    function calculateStakingYield() public view returns (uint256, uint256) {
         Stake storage stake01 = _stakes[msg.sender];
 
         uint256 poolTimeElapsed = (block.timestamp - PoolTime) / 86400;
@@ -146,11 +174,9 @@ contract Pool {
 
         uint256 maxRewardsPerUser = maxRewardsPerDay / withdrawals;
 
-        uint256 amountStaked = stake01.amount;
+        uint256 rewards = (stake01.reward_ratio * RewardsBalance) / 1000000;
 
-        uint256 accumulated = ((stake01.reward_ratio * RewardsBalance) / 10000) + amountStaked;
-
-        return (accumulated, amountStaked, maxRewardsPerUser, maxRewardsPerDay);
+        return (rewards, maxRewardsPerUser);
     }
 
     function withdrawal() public payable {
@@ -164,20 +190,24 @@ contract Pool {
 
         require(timeElapsed >= stake02.lockduration, "Withdrawal is not available at this time.");
 
-        (uint256 yield, , uint256 maxRewardsPerUser, ) = calculateStakingYield();
+        (uint256 rewards, uint256 maxRewardsPerUser) = calculateStakingYield();
 
-        if(yield > maxRewardsPerUser) {
-            // require(Token.transferFrom(address(this), msg.sender, yield), "Transfer of tokens from staking yield failed.");
+        if(rewards > maxRewardsPerUser) {
+            uint256 amount = maxRewardsPerUser + stake02.amount;
+
+            // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
         
-            stake02.balance = maxRewardsPerUser - yield;
+            stake02.balance = rewards - maxRewardsPerUser;
 
-            emit Withdrawal(msg.sender, maxRewardsPerUser);
+            emit Withdrawal(msg.sender, amount);
         } else {
-            // require(Token.transferFrom(address(this), msg.sender, yield), "Transfer of tokens from staking yield failed.");
+            uint256 amount = rewards + stake02.amount;
+
+            // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
 
             stake02.stake_status = Status.INACTIVE;
 
-            emit Withdrawal(msg.sender, yield);
+            emit Withdrawal(msg.sender, amount);
         }
     }
 
@@ -192,17 +222,21 @@ contract Pool {
 
         uint256 stakeTimeLeft = stake03.lockduration - stakeTimeElapsed;
 
-        (uint256 yield, , uint256 maxRewardsPerUser, ) = calculateStakingYield();
+        (uint256 rewards, uint256 maxRewardsPerUser) = calculateStakingYield();
 
-        uint256 amount = yield / stakeTimeLeft;
+        rewards = rewards - (stakeTimeLeft * EarlyWithdrawalFee);
 
-        if(amount > maxRewardsPerUser) {
+        if(rewards > maxRewardsPerUser) {
+            uint256 amount = maxRewardsPerUser + stake03.amount;
+
             // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
         
-            stake03.balance = maxRewardsPerUser - amount;
+            stake03.balance = rewards - maxRewardsPerUser;
 
-            emit Withdrawal(msg.sender, maxRewardsPerUser);
+            emit Withdrawal(msg.sender, amount);
         } else {
+            uint256 amount = rewards + stake03.amount;
+
             // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
 
             stake03.stake_status = Status.INACTIVE;
@@ -216,24 +250,24 @@ contract Pool {
 
         Stake storage stake04 = _stakes[msg.sender];
 
-        uint256 amount = stake04.balance;
+        uint256 balance = stake04.balance;
 
-        require(stake04.stake_status == Status.ACTIVE && amount > 0, "You are ineligible for withdrawal.");
+        require(stake04.stake_status == Status.ACTIVE && balance > 0, "You are ineligible for withdrawal.");
     
-        ( , , uint256 maxRewardsPerUser, ) = calculateStakingYield();
+        ( , uint256 maxRewardsPerUser) = calculateStakingYield();
 
-        if(amount > maxRewardsPerUser) {
-            // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+        if(balance > maxRewardsPerUser) {
+            // require(Token.transferFrom(address(this), msg.sender, maxRewardsPerUser), "Transfer of tokens from staking yield failed.");
         
-            stake04.balance = maxRewardsPerUser - amount;
+            stake04.balance = balance - maxRewardsPerUser;
 
             emit Withdrawal(msg.sender, maxRewardsPerUser);
         } else {
-            // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+            // require(Token.transferFrom(address(this), msg.sender, balance), "Transfer of tokens from staking yield failed.");
 
             stake04.stake_status = Status.INACTIVE;
 
-            emit Withdrawal(msg.sender, amount);
+            emit Withdrawal(msg.sender, balance);
         }
     }
 
@@ -243,6 +277,10 @@ contract Pool {
 
     function changePoolDuration(uint256 duration) onlyCreator public {
         PoolDuration = duration;
+    }
+
+    function changeEarlyWithdrawalFee(uint256 fee) onlyCreator public {
+        EarlyWithdrawalFee = fee;
     }
 
     function deactivatePool() onlyCreator public {
