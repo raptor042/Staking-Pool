@@ -74,7 +74,7 @@ contract Pool {
     function staking(uint256 _amount, uint256 duration) public payable {
         require(PoolStatus == Status.ACTIVE, "This Pool is not active at the moment.");
 
-        require(userStakeExists(), "A user cannot stake while he/she has an active staking position.");
+        require(!userStakeExists(), "A user cannot stake while he/she has an active staking position.");
 
         require(_amount > 0, "Not enough tokens required for staking.");
 
