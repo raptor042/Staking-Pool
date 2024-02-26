@@ -1,12 +1,12 @@
 require('dotenv').config();
 require("@nomicfoundation/hardhat-toolbox");
 
-const { PRIVATE_KEY, GOERLI_API_URL, MAINNET_API_URL, ETHERSCAN_API_KEY } = process.env;
+const { PRIVATE__KEY ,PRIVATE_KEY, TESTNET_API_URL, MAINNET_API_URL, BSCSCAN_API_KEY } = process.env;
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
-    version: "0.8.20",
+    version: "0.8.19",
     settings: {
       optimizer: {
         enabled: true,
@@ -14,12 +14,12 @@ module.exports = {
       }
     }
   },
-  defaultNetwork: "goerli",
+  defaultNetwork: "testnet",
   networks: {
     hardhat: {},
-    goerli: {
-      url: `${GOERLI_API_URL}`,
-      accounts: [`0x${PRIVATE_KEY}`]
+    testnet: {
+      url: `${TESTNET_API_URL}`,
+      accounts: [`0x${PRIVATE__KEY}`]
     },
     mainnet: {
       url: `${MAINNET_API_URL}`,
@@ -35,6 +35,6 @@ module.exports = {
     timeout: 40000
   },
   etherscan: {
-    apiKey: ETHERSCAN_API_KEY
+    apiKey: BSCSCAN_API_KEY
   }
 };

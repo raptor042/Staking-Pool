@@ -1,8 +1,30 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.20;
+pragma solidity ^0.8.19;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+interface IERC20 {
+    function decimals() external view returns (uint8);
+
+    function symbol() external view returns (string memory);
+
+    function name() external view returns (string memory);
+
+    function totalSupply() external view returns (uint256);
+
+    function balanceOf(address account) external view returns (uint256);
+
+    function transfer(address recipient, uint256 amount) external returns (bool);
+
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+}
 
 contract Pool {
     enum Status {
@@ -13,6 +35,8 @@ contract Pool {
     IERC20 public Token;
 
     address public Creator;
+
+    string public Logo;
 
     uint256 public PoolTime;
 
@@ -46,12 +70,12 @@ contract Pool {
 
     event Withdrawal(address indexed _user, uint256 amount);
 
-    constructor(address _token, address creator, uint256 duration, uint256 rewards, uint256 fee) {
+    constructor(address _token, string memory logo, address creator, uint256 duration, uint256 rewards, uint256 fee) {
         Token = IERC20(_token);
 
-        // require(Token.transferFrom(msg.sender, address(this), rewards), "Transfer of token rewards for staking failed.");
-
         Creator = creator;
+
+        Logo = logo;
 
         PoolTime = block.timestamp;
 
@@ -62,6 +86,10 @@ contract Pool {
         EarlyWithdrawalFee = fee;
 
         TotalStaked = 0;
+
+        Token.transferFrom(creator, address(this), rewards);
+
+        require(Token.balanceOf(address(this)) >= rewards, "Transfer of token rewards for staking failed.");
 
         RewardsBalance = rewards;
     }
@@ -80,7 +108,11 @@ contract Pool {
 
         require(duration < PoolDuration && duration >= 1, "Inappriopate lock duration.");
 
-        // require(Token.transferFrom(msg.sender, address(this), _amount), "Transfer of tokens for staking failed.");
+        Token.transferFrom(msg.sender, address(this), _amount);
+
+        uint256 prevBalance = RewardsBalance + TotalStaked + _amount;
+
+        require(Token.balanceOf(address(this)) >= prevBalance, "Transfer of tokens for staking failed.");
 
         TotalStaked += _amount;
 
@@ -195,7 +227,11 @@ contract Pool {
         if(rewards > maxRewardsPerUser) {
             uint256 amount = maxRewardsPerUser + stake02.amount;
 
-            // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+            Token.transferFrom(address(this), msg.sender, amount);
+
+            uint256 newBalance = RewardsBalance + TotalStaked - amount;
+
+            require(Token.balanceOf(address(this)) <= newBalance, "Transfer of tokens from staking yield failed.");
         
             stake02.balance = rewards - maxRewardsPerUser;
 
@@ -203,7 +239,11 @@ contract Pool {
         } else {
             uint256 amount = rewards + stake02.amount;
 
-            // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+            Token.transferFrom(address(this), msg.sender, amount);
+
+            uint256 newBalance = RewardsBalance + TotalStaked - amount;
+
+            require(Token.balanceOf(address(this)) <= newBalance, "Transfer of tokens from staking yield failed.");
 
             stake02.stake_status = Status.INACTIVE;
 
@@ -218,18 +258,24 @@ contract Pool {
 
         require(stake03.stake_status == Status.ACTIVE, "You are ineligible for withdrawal.");
 
-        uint256 stakeTimeElapsed = (block.timestamp - stake03.locktime) / 86400;
+        // uint256 stakeTimeElapsed = (block.timestamp - stake03.locktime) / 86400;
 
-        uint256 stakeTimeLeft = stake03.lockduration - stakeTimeElapsed;
+        // uint256 stakeTimeLeft = stake03.lockduration - stakeTimeElapsed;
 
         (uint256 rewards, uint256 maxRewardsPerUser) = calculateStakingYield();
 
-        rewards = rewards - (stakeTimeLeft * EarlyWithdrawalFee);
+        uint256 fee = (rewards * EarlyWithdrawalFee) / 100;
+
+        rewards = rewards - fee;
 
         if(rewards > maxRewardsPerUser) {
             uint256 amount = maxRewardsPerUser + stake03.amount;
 
-            // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+            Token.transferFrom(address(this), msg.sender, amount);
+
+            uint256 newBalance = RewardsBalance + TotalStaked - amount;
+
+            require(Token.balanceOf(address(this)) <= newBalance, "Transfer of tokens from staking yield failed.");
         
             stake03.balance = rewards - maxRewardsPerUser;
 
@@ -237,7 +283,11 @@ contract Pool {
         } else {
             uint256 amount = rewards + stake03.amount;
 
-            // require(Token.transferFrom(address(this), msg.sender, amount), "Transfer of tokens from staking yield failed.");
+            Token.transferFrom(address(this), msg.sender, amount);
+
+            uint256 newBalance = RewardsBalance + TotalStaked - amount;
+
+            require(Token.balanceOf(address(this)) <= newBalance, "Transfer of tokens from staking yield failed.");
 
             stake03.stake_status = Status.INACTIVE;
 
@@ -257,13 +307,21 @@ contract Pool {
         ( , uint256 maxRewardsPerUser) = calculateStakingYield();
 
         if(balance > maxRewardsPerUser) {
-            // require(Token.transferFrom(address(this), msg.sender, maxRewardsPerUser), "Transfer of tokens from staking yield failed.");
+            Token.transferFrom(address(this), msg.sender, maxRewardsPerUser);
+
+            uint256 newBalance = RewardsBalance + TotalStaked - maxRewardsPerUser;
+
+            require(Token.balanceOf(address(this)) <= newBalance, "Transfer of tokens from staking yield failed.");
         
             stake04.balance = balance - maxRewardsPerUser;
 
             emit Withdrawal(msg.sender, maxRewardsPerUser);
         } else {
-            // require(Token.transferFrom(address(this), msg.sender, balance), "Transfer of tokens from staking yield failed.");
+            Token.transferFrom(address(this), msg.sender, balance);
+
+            uint256 newBalance = RewardsBalance + TotalStaked - balance;
+
+            require(Token.balanceOf(address(this)) <= newBalance, "Transfer of tokens from staking yield failed.");
 
             stake04.stake_status = Status.INACTIVE;
 
@@ -292,8 +350,12 @@ contract Pool {
     }
 
     function increaseRewardsBalance(uint256 _amount) onlyCreator public {
-        // require(Token.transferFrom(msg.sender, address(this), _amount), "Transfer of token rewards for staking failed.");
-        
+        Token.transferFrom(msg.sender, address(this), _amount);
+
+        uint256 prevBalance = RewardsBalance + TotalStaked + _amount;
+
+        require(Token.balanceOf(address(this)) >= prevBalance, "Transfer of tokens for staking failed.");
+
         RewardsBalance += _amount;
     }
 }
