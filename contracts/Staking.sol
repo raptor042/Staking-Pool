@@ -42,7 +42,7 @@ contract Staking {
 
         IERC202 Token = IERC202(token);
 
-        Token.approve(address(this), amount);
+        // Token.approve(address(this), amount);
 
         Pool pool = new Pool(
             token,
@@ -54,6 +54,10 @@ contract Staking {
         );
 
         pools.push(address(pool));
+
+        Token.transferFrom(creator, address(pool), amount);
+
+        require(Token.balanceOf(address(pool)) >= amount, "Transfer of token rewards for staking failed.");
 
         emit CreatePool(msg.sender, token, address(pool), duration, amount);
     }

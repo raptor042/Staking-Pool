@@ -87,10 +87,6 @@ contract Pool {
 
         TotalStaked = 0;
 
-        Token.transferFrom(creator, address(this), rewards);
-
-        require(Token.balanceOf(address(this)) >= rewards, "Transfer of token rewards for staking failed.");
-
         RewardsBalance = rewards;
     }
 
