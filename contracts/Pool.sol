@@ -104,9 +104,11 @@ contract Pool {
 
         require(duration < PoolDuration && duration >= 1, "Inappriopate lock duration.");
 
-        Token.transferFrom(msg.sender, address(this), _amount);
-
         uint256 prevBalance = RewardsBalance + TotalStaked + _amount;
+
+        // Token.approve(address(this), prevBalance);
+
+        Token.transferFrom(msg.sender, address(this), _amount);
 
         require(Token.balanceOf(address(this)) >= prevBalance, "Transfer of tokens for staking failed.");
 
@@ -223,7 +225,7 @@ contract Pool {
         if(rewards > maxRewardsPerUser) {
             uint256 amount = maxRewardsPerUser + stake02.amount;
 
-            Token.transferFrom(address(this), msg.sender, amount);
+            Token.transfer(msg.sender, amount);
 
             uint256 newBalance = RewardsBalance + TotalStaked - amount;
 
@@ -235,7 +237,7 @@ contract Pool {
         } else {
             uint256 amount = rewards + stake02.amount;
 
-            Token.transferFrom(address(this), msg.sender, amount);
+            Token.transfer(msg.sender, amount);
 
             uint256 newBalance = RewardsBalance + TotalStaked - amount;
 
@@ -267,7 +269,7 @@ contract Pool {
         if(rewards > maxRewardsPerUser) {
             uint256 amount = maxRewardsPerUser + stake03.amount;
 
-            Token.transferFrom(address(this), msg.sender, amount);
+            Token.transfer(msg.sender, amount);
 
             uint256 newBalance = RewardsBalance + TotalStaked - amount;
 
@@ -279,7 +281,7 @@ contract Pool {
         } else {
             uint256 amount = rewards + stake03.amount;
 
-            Token.transferFrom(address(this), msg.sender, amount);
+            Token.transfer(msg.sender, amount);
 
             uint256 newBalance = RewardsBalance + TotalStaked - amount;
 
@@ -303,7 +305,7 @@ contract Pool {
         ( , uint256 maxRewardsPerUser) = calculateStakingYield();
 
         if(balance > maxRewardsPerUser) {
-            Token.transferFrom(address(this), msg.sender, maxRewardsPerUser);
+            Token.transfer(msg.sender, maxRewardsPerUser);
 
             uint256 newBalance = RewardsBalance + TotalStaked - maxRewardsPerUser;
 
@@ -313,7 +315,7 @@ contract Pool {
 
             emit Withdrawal(msg.sender, maxRewardsPerUser);
         } else {
-            Token.transferFrom(address(this), msg.sender, balance);
+            Token.transfer(msg.sender, balance);
 
             uint256 newBalance = RewardsBalance + TotalStaked - balance;
 
@@ -346,9 +348,11 @@ contract Pool {
     }
 
     function increaseRewardsBalance(uint256 _amount) onlyCreator public {
-        Token.transferFrom(msg.sender, address(this), _amount);
-
         uint256 prevBalance = RewardsBalance + TotalStaked + _amount;
+
+        // Token.approve(address(this), prevBalance);
+
+        Token.transferFrom(msg.sender, address(this), _amount);
 
         require(Token.balanceOf(address(this)) >= prevBalance, "Transfer of tokens for staking failed.");
 

@@ -55,7 +55,7 @@ contract Staking {
 
         pools.push(address(pool));
 
-        Token.transferFrom(creator, address(pool), amount);
+        Token.transferFrom(msg.sender, address(pool), amount);
 
         require(Token.balanceOf(address(pool)) >= amount, "Transfer of token rewards for staking failed.");
 
